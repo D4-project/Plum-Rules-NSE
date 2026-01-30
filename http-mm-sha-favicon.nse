@@ -17,6 +17,8 @@ web server is retrieved and parsed for a <code><link rel="icon"></code>
 element. If that fails, the icon is looked for in <code>/favicon.ico</code>. If
 a <code><link></code> favicon points to a different host or port, it is ignored.
 ]]
+author = "CIRCL/Paul JUNG (Thanat0s)"
+license = "GNU Affero General Public Licence https://www.gnu.org/licenses/agpl-3.0.en.html"
 
 ---
 -- @args favicon.uri URI that will be requested for favicon.
@@ -30,12 +32,10 @@ a <code><link></code> favicon points to a different host or port, it is ignored.
 
 -- HTTP default favicon murmur32 (shodan like) / sha256 hash
 -- rev 1.0 (2025-10-10)
--- Original NASL script by Javier Fernandez-Sanguino Pena
--- NSE http-favicon.nse by Vlatko Kosturjak
--- SHA256 Implementation by OGabrieLima https://github.com/OGabrieLima (2024-04-08) 
+-- Original NASL script inspiration by Javier Fernandez-Sanguino Pena
+-- NSE http-favicon.nse by Vlatko Kosturjak
+-- SHA256 Implementation by OGabrieLima https://github.com/OGabrieLima (2024-04-08)
 
-author = "CIRCL 2025 - Paul Jung (Thanat0s)"
-license = ""
 categories = {"default", "discovery", "safe"}
 portrule = shortport.http
 

@@ -1,12 +1,10 @@
 description = [[
-
-Author: Paul JUNG/CIRCL - 2026
-Licence:  GNU AFFERO GENERAL PUBLIC LICENSE
+Detect Ivanti EPMM Hosts
 
 Apply with host having the PLUM match :
 "http_server:server"
 
-Checks for Ivanti EPMM MDM by requesting a known API endpoint.
+This NSE Checks for Ivanti EPMM MDM by requesting a known API endpoint.
 Detection requires:
 - HTTP 401 on known API endpoint
 - Presence of Server header with value "server"
@@ -14,6 +12,8 @@ Detection requires:
 
 https://help.ivanti.com/mi/help/en_us/CORE/12.x/api2/APIv2/IvantiEPMM_V2APIGuide.pdf
 ]]
+author = "CIRCL/Paul JUNG (Thanat0s)"
+license = "GNU Affero General Public Licence https://www.gnu.org/licenses/agpl-3.0.en.html"
 
 categories = {"discovery"}
 
