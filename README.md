@@ -6,7 +6,7 @@
 </div>
 <p>
 <center>
-*Beta version*
+* NSE Ruleset *
 </center>
 </p>
 
