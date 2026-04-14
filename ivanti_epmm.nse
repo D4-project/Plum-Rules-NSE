@@ -9,13 +9,13 @@ Detection requires:
 - HTTP 401 on known API endpoint
 - Presence of Server header with value "server"
 - Random page returning 404 (not 401)
-
+- Register page /mifs/c/i/reg/reg.html
 https://help.ivanti.com/mi/help/en_us/CORE/12.x/api2/APIv2/IvantiEPMM_V2APIGuide.pdf
 ]]
 author = "CIRCL/Paul JUNG (Thanat0s)"
 license = "GNU Affero General Public Licence https://www.gnu.org/licenses/agpl-3.0.en.html"
 
-categories = {"discovery"}
+categories = {"discovery", "safe"}
 
 local http = require "http"
 local shortport = require "shortport"
