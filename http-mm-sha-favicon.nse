@@ -1,5 +1,6 @@
 local http = require "http"
 local nmap = require "nmap"
+local openssl = require "openssl"
 local shortport = require "shortport"
 local stdnse = require "stdnse"
 local string = require "string"
@@ -7,7 +8,7 @@ local url = require "url"
 local base64 = require "base64"
 
 description = [[
-Gets the favicon from a web page then hash it using sha256 and the method
+Gets the favicon from a web page then hash it using md5, sha256 and the method
 "http.favicon.hash" used by shodan.io murmur3_32(base64(favicon))
 The results is displayed as a signed integer.
 
@@ -30,7 +31,7 @@ license = "GNU Affero General Public Licence https://www.gnu.org/licenses/agpl-3
 -- @output
 -- |_ http-mmfavicon: signed integer
 
--- HTTP default favicon murmur32 (shodan like) / sha256 hash
+-- HTTP default favicon murmur32 (shodan like) / md5 / sha256 hash
 -- rev 1.0 (2025-10-10)
 -- Original NASL script inspiration by Javier Fernandez-Sanguino Pena
 -- NSE http-favicon.nse by Vlatko Kosturjak
@@ -275,6 +276,7 @@ action = function(host, port)
   local results = stdnse.output_table()
    -- local results = {}
   local index, icon
+  local favicon_file
   local root = ""
 
   if(stdnse.get_script_args('favicon.root')) then
@@ -284,7 +286,8 @@ action = function(host, port)
   -- If parameter favicon.uri is given, we fetch it, always and only this.
   local favicon_uri = stdnse.get_script_args("favicon.uri")
   if(favicon_uri) then
-    answer = http.get( host, port, root .. "/" .. favicon_uri)
+    favicon_file = root .. "/" .. favicon_uri
+    answer = http.get( host, port, favicon_file)
     stdnse.debug4("Using URI %s", favicon_uri)
   else
     -- Otherwise, first try parsing the home page "/" for favicon reference.
@@ -303,6 +306,7 @@ action = function(host, port)
           icon_port == port.number then
           -- request the favicon
           answer = http.get( icon_host, icon_port, icon_path )
+          favicon_file = icon_path
         else
           answer = nil
         end
@@ -313,7 +317,8 @@ action = function(host, port)
 
     -- If that didn't work, try /favicon.ico.
     if not answer or answer.status ~= 200 then
-      answer = http.get( host, port, root .. "/favicon.ico" )
+      favicon_file = root .. "/favicon.ico"
+      answer = http.get( host, port, favicon_file )
       stdnse.debug4("Using default URI.")
     end
   end
@@ -324,9 +329,12 @@ if answer and answer.status == 200 then
     local debugs = ""
     -- MurmurHash3 32 bits should be done on a B64 CLRF enabled dump.
     local rb64 = add_crlf(base64.enc(answer.body)) 
-    results.faviconhash = murmur3_32(rb64)
+    results.favicon_file = favicon_file
+    results.favicon_mmhash = murmur3_32(rb64)
+    md5sum = stdnse.tohex(openssl.md5(answer.body))
+    results.favicon_md5 = md5sum
     local sha256sum=sha256(answer.body)
-    results.sha256 = sha256sum
+    results.favicon_sha256 = sha256sum
     
     if nmap.verbosity() > 1  then
         local hex_debug = {}
