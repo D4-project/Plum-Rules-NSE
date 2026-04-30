@@ -34,6 +34,7 @@ portrule = function(host, port)
 end
 
 local SCRIPT_KEY = SCRIPT_NAME
+local MAX_OUTPUT_CHARS = 255
 
 local function get_arg(name, default)
   return tonumber(stdnse.get_script_args(SCRIPT_KEY .. "." .. name)) or default
@@ -54,20 +55,23 @@ local function replace_nonprint(data, len)
 
   for char in data:gmatch(".") do
     local byte = char:byte()
+    local token
+
     if byte < 32 or byte > 126 then
-      output[#output + 1] = string.format("\\x%02X", byte)
-      count = count + 4
+      token = string.format("\\%02X", byte)
     else
-      output[#output + 1] = char
-      count = count + 1
+      token = char
     end
 
-    if type(len) == "number" and count >= len then
-      break
+    if type(len) == "number" and count + token:len() > len then
+      return table.concat(output), true
     end
+
+    output[#output + 1] = token
+    count = count + token:len()
   end
 
-  return table.concat(output)
+  return table.concat(output), false
 end
 
 local function save_banner(host, port, result)
@@ -75,62 +79,19 @@ local function save_banner(host, port, result)
   host.registry[SCRIPT_KEY][port.number .. "/" .. port.protocol] = result
 end
 
-local function extra_output()
-  return (nmap.verbosity() - nmap.debugging() > 0 and nmap.verbosity() - nmap.debugging()) or 0
-end
-
 local function output_banner(out)
   if type(out) ~= "string" or out == "" then
     return nil
   end
 
-  local filename = SCRIPT_NAME
-  local line_len = 75
-  local fline_offset = 5
-  local fline_len
+  out = out:match("^%s*(.-)%s*$")
 
-  if filename:len() < (line_len - fline_offset) then
-    fline_len = line_len - 1 - filename:len() - fline_offset
-  else
-    fline_len = 0
+  local encoded, truncated = replace_nonprint(out, MAX_OUTPUT_CHARS)
+  if truncated then
+    encoded = replace_nonprint(out, MAX_OUTPUT_CHARS - 3) .. "..."
   end
 
-  local sline_len = line_len - 1 - (fline_offset - 2)
-  local total_out_chars
-
-  if fline_len > 0 then
-    total_out_chars = fline_len + (extra_output() * sline_len)
-  else
-    total_out_chars = (1 + extra_output()) * sline_len
-  end
-
-  out = replace_nonprint(out:match("^%s*(.-)%s*$"), 1 + total_out_chars)
-
-  if out:len() > total_out_chars then
-    while out:len() > total_out_chars do
-      if out:sub(-4, -1):match("\\x%x%x") then
-        out = out:sub(1, -5)
-      else
-        out = out:sub(1, -2)
-      end
-    end
-    out = ("%s..."):format(out:sub(1, total_out_chars - 3))
-  end
-
-  local ptr = fline_len
-  local lines = {}
-  while true do
-    if out:len() >= ptr then
-      lines[#lines + 1] = (ptr > 0 and out:sub(1, ptr)) or " "
-      out = out:sub(ptr + 1)
-      ptr = sline_len
-    else
-      lines[#lines + 1] = out
-      break
-    end
-  end
-
-  return table.concat(lines, "\n")
+  return encoded
 end
 
 local function connect_socket(host, port, timeout)
