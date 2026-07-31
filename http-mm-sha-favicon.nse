@@ -269,6 +269,50 @@ local function add_crlf(str, width)
     return s .. "\n"
 end
 
+local function is_favicon_response(response)
+  if not response or response.status ~= 200 or
+    type(response.body) ~= "string" or response.body == "" then
+    return false
+  end
+
+  local content_type = ""
+  if response.header then
+    content_type = string.lower(response.header["content-type"] or "")
+  end
+  if string.find(content_type, "^%s*text/html") or
+    string.find(content_type, "^%s*application/xhtml%+xml") then
+    return false
+  end
+
+  -- Some servers return a login/error page without a useful Content-Type.
+  local prefix = string.sub(response.body, 1, 512)
+  if string.sub(prefix, 1, 3) == "\239\187\191" then
+    prefix = string.sub(prefix, 4)
+  end
+  prefix = string.lower(string.gsub(prefix, "^%s+", ""))
+  if string.find(prefix, "^<!doctype%s+html") or
+    string.find(prefix, "^<html[%s>]") then
+    return false
+  end
+
+  return true
+end
+
+local function final_response_path(initial_path, response)
+  local path = initial_path
+  for _, location in ipairs(response.location or {}) do
+    local parsed = url.parse(url.absolute(path, location))
+    if parsed and parsed.path then
+      path = url.build({
+        path = parsed.path,
+        params = parsed.params,
+        query = parsed.query,
+      })
+    end
+  end
+  return path
+end
+
 action = function(host, port)
   local md5sum,answer
   local match
@@ -292,18 +336,21 @@ action = function(host, port)
   else
     -- Otherwise, first try parsing the home page "/" for favicon reference.
     index = http.get( host, port, root .. "/" )
-    if index.status == 200 or index.status == 503 then
+    if index and (index.status == 200 or index.status == 503) then
       -- find the favicon pattern
-      icon = parseIcon( index.body )
+      icon = parseIcon( index.body or "" )
       -- if we find a pattern, we fetch it.
       if icon then
         local hostname = host.targetname or (host.name ~= "" and host.name) or host.ip
+        local page_path = final_response_path(root .. "/", index)
+        local page_scheme = shortport.ssl(host, port) and "https" or "http"
         stdnse.debug1("Got icon URL %s.", icon)
-        local icon_host, icon_port, icon_path = parse_url_relative(icon, hostname, port.number, root)
+        local icon_host, icon_port, icon_path, icon_scheme =
+          parse_url_relative(icon, hostname, port.number, page_path, page_scheme)
         if (icon_host == host.ip or
           icon_host == host.targetname or
           icon_host == (host.name ~= '' and host.name)) and
-          icon_port == port.number then
+          icon_port == port.number and icon_scheme == page_scheme then
           -- request the favicon
           answer = http.get( icon_host, icon_port, icon_path )
           favicon_file = icon_path
@@ -316,7 +363,7 @@ action = function(host, port)
     end
 
     -- If that didn't work, try /favicon.ico.
-    if not answer or answer.status ~= 200 then
+    if not is_favicon_response(answer) then
       favicon_file = root .. "/favicon.ico"
       answer = http.get( host, port, favicon_file )
       stdnse.debug4("Using default URI.")
@@ -324,7 +371,7 @@ action = function(host, port)
   end
 
 -- Finaly if we have a favicon, we hash it.
-if answer and answer.status == 200 then
+if is_favicon_response(answer) then
     stdnse.debug1("Favicon found.")
     local debugs = ""
     -- MurmurHash3 32 bits should be done on a B64 CLRF enabled dump.
@@ -352,27 +399,39 @@ end
 return results
 end
 
-local function dirname(path)
-  local dir
-  dir = string.match(path, "^(.*)/")
-  return dir or ""
-end
-
 -- Return a URL's host, port, and path, filling in the results with the given
 -- host, port, and path if the URL is relative. Return nil if the scheme is not
 -- "http" or "https".
-function parse_url_relative(u, host, port, path)
-  local scheme, abspath
-  u = url.parse(u)
-  scheme = u.scheme or "http"
+function parse_url_relative(u, host, port, path, current_scheme)
+  local parsed = url.parse(u)
+  if not parsed then
+    return nil
+  end
+
+  local scheme = parsed.scheme or current_scheme or
+    (port == 443 and "https" or "http")
   if not (scheme == "http" or scheme == "https") then
     return nil
   end
-  abspath = u.path or ""
-  if not string.find(abspath, "^/") then
-    abspath = dirname(path) .. "/" .. abspath
+
+  local resolved = url.parse(url.absolute(path or "/", u))
+  if not resolved then
+    return nil
   end
-  return u.host or host, u.port or url.get_default_port(scheme), abspath
+
+  local abspath = url.build({
+    path = resolved.path or "/",
+    params = resolved.params,
+    query = resolved.query,
+  })
+  local icon_port
+  if parsed.host or parsed.scheme then
+    icon_port = parsed.port or url.get_default_port(scheme)
+  else
+    icon_port = port
+  end
+
+  return parsed.host or host, icon_port, abspath, scheme
 end
 
 function parseIcon( body )
